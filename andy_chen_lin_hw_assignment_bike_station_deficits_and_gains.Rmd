@@ -1,0 +1,224 @@
+---
+title: "Assignment - Bike Station Deficits/Gains"
+author: "Andy Chen Lin"
+date: "16 November 2023"
+output: html_notebook
+---
+
+This experiment continues on to our analysis on the DC Bikeshare Project. We are using the most recent September data from DC Capital Bikeshare, which can be obtained by following this link: https://s3.amazonaws.com/capitalbikeshare-data/index.html. 
+
+For this assignment, we are interested in which stations "gain"  or "lose" bikes over time. We are also interested in tidying our data to remove any data for which the start time is after the end time. We have determined that the duration of each bikeride meeting  this criteria will give a negative value, which is not useful in our analysis. We have also identified that any biketime duration which is less than 60 secs and more than 5 hours should be remove from the dataset as well. 
+
+
+### Load the Necessary Data Packages 
+
+Baseline packages for our analysis
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+library(openmeteo)
+```
+
+# Loading the Bikeshare Raw Data
+
+```{r}
+df1 <- read_csv("data_raw/202309-capitalbikeshare-tripdata.csv", show_col_types = FALSE) %>% clean_names()
+```
+
+Before working on the new goal of this analysis, all previous manipulations to the data set from previous labs have been applied as well. 
+
+# Creating Dataframe 2 - Interjoing 
+```{r}
+df2s=df1 %>% 
+  select(rideable_type,member_casual,
+                	contains("start"),ride_id)%>% 
+  mutate(start_stop="start")%>%
+  rename(t=started_at,
+     	station_name=start_station_name,
+     	station_id=start_station_id,
+     	lat=start_lat,
+     	lng=start_lng)
+
+df2e=df1 %>%
+select(ride_id,rideable_type,member_casual,
+                	contains("end")) %>%
+  mutate(start_stop="stop") %>%
+  rename(t=ended_at,
+     	station_name=end_station_name,
+     	station_id=end_station_id,
+     	lat=end_lat,
+     	lng=end_lng)
+
+df2=bind_rows(df2s,df2e) %>%
+  arrange(t) %>%
+  mutate(rider_delta=(start_stop=="start")*2-1) %>% #change in ridership 
+  mutate(riders=cumsum(rider_delta)) %>%
+  relocate(riders,.after=t)
+
+```
+
+
+# Applying to Previously Determined Manipulations from Prior Analysis to the Entire Data Set 
+```{r}
+df_r=df2 |>
+  mutate(t_f=floor_date(t,"10 mins")) %>%
+  relocate(t_f,.after=t) %>%
+  slice_head(n=1,by=t_f)
+```
+
+
+
+## Get Weather Data using weather_history
+```{r}
+df_w=weather_history("Washington",
+                	start = "2023-09-01",
+                	end = "2023-09-30",
+                	hourly = c("apparent_temperature",
+                           	"wind_speed_10m",
+                           	"precipitation"))
+```
+# Merging Bike and Weather Data
+
+```{r}
+df_s=df2 %>% slice_sample(n=1000)
+df_j=df_s %>% left_join(df_w,
+                     	by=join_by(closest(t>=datetime)))
+```
+
+```{r}
+df_j=df_s %>% 
+   left_join(df_w,by=join_by(closest(t>=datetime)))  %>%
+   relocate(datetime, .after=t)
+ 
+head(df_j)
+```
+
+## Investigating the Time Zone Mismatch Between the Bikeshare and Weather Datasets 
+
+```{r}
+df2c=df2 %>% mutate(t=force_tz(t,tzone="America/New_York")) #corrected
+ 
+df_s2=df2c %>% slice_sample(n=1000)
+ 
+df_j2=df_s2 %>% 
+   left_join(df_w,by=join_by(closest(t>=datetime)))  %>%
+   relocate(datetime, .after=t)
+ 
+head(df_j2)
+```
+
+```{r}
+dfc=df2c %>% 
+  left_join(df_w,by=join_by(closest(t>=datetime))) %>%
+   relocate(datetime, .after=t) %>%
+  rename(atemp=hourly_apparent_temperature,
+         wind=hourly_wind_speed_10m,
+         prec=hourly_precipitation)
+```
+
+```{r}
+df1_duration = df1 |>
+  mutate(ride_time = ended_at-started_at)
+```
+
+Now that all our previous analysis have been loaded, we will move on attempting to remove any data where the start time is after the end time.
+
+# Removing any Data for Which Start Time is After End Time 
+
+```{r}
+dfb = df1 %>%
+  filter(started_at<ended_at)
+
+```
+
+
+##  Create a Dataframe that Counts the Number of "Starts" from each Station ID
+
+```{r}
+df_starts_test = dfb %>%
+  slice_tail(n=500) %>%
+  group_by(start_station_id) %>%
+  count(start_station_id)
+  # summarise(n = n(start_station_name))
+head(df_starts)
+
+```
+
+
+### Applying Code to the Entire Data Set 
+
+```{r}
+df_starts = dfb %>%
+  group_by(start_station_id,start_station_name) %>%
+  count(start_station_id)
+head(df_starts)
+
+```
+
+## Create a Dataframe that Counts the Number of "Ends" from each Station ID 
+
+```{r}
+df_ends = dfb %>%
+  group_by(end_station_id) %>%
+  count(end_station_id)
+head(df_ends)
+```
+
+## Join the Two Dataframes Together (df_starts and df_ends)
+
+```{r}
+df_net = df_starts %>%
+  left_join(df_ends, by=join_by(start_station_id==end_station_id))  %>%
+  rename(station_id = start_station_id,
+         station_name = start_station_name,
+         station_start_count = n.x,
+         station_end_count =  n.y) 
+head(df_net)
+  
+```
+
+## Compute the "Net Gain" (Arrivals-Departures from Each Station)
+
+```{r}
+
+df_netc = df_net %>%
+  mutate(net_gain = station_end_count - station_start_count)
+head(df_netc)
+  
+```
+
+## Perform Exploratory Analysis (e.g Visualization) on the Resultant Dataframe 
+
+```{r}
+
+df_netc %>%
+  ggplot(aes(station_id,net_gain,))+
+  geom_point(alpha=0.1)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
