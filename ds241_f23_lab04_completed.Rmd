@@ -1,0 +1,152 @@
+---
+title: "Lab4"
+output: html_document
+date: "2023-10-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+install.packages("here")
+install.packages("readr")
+install.packages("dsbox")
+library(tidyverse)
+library(clean)
+library(dsbox)
+library(readr)
+library(here)
+
+states <- read_csv("data_raw/states.csv")
+
+## Dataset of Dennys and Laquinta are download from dsbox package
+
+## Exercise 1
+nrow(dennys)
+ncol(dennys)
+
+## Exercise 2
+nrow(laquinta)
+ncol(laquinta)
+
+## Exercise 3
+# Laquinta and Dennys are in dozens of countrys. 
+
+## Exericse 4
+laquinta |>
+  filter(country)
+dennys |>
+  filter(country)
+
+## Exercise 5
+dennys %>%
+  filter(!(state %in% states$abbreviation))
+
+## Exercise 6
+dennys %>%
+  mutate(country = "United States")
+
+## Exercise 7
+# Besides US, Laquinta are in Canada, Mexico and Honduras.
+
+## Exercise 8
+laquinta %>%
+  mutate(country = case_when(
+    state %in% state.abb     ~ "United States",
+    state %in% c("ON", "BC") ~ "Canada",
+    state == "ANT"           ~ "Colombia",
+    state == "MEX"   ~ "Mexico",                    
+  ))
+
+laquinta <- laquinta %>%
+  filter(country == "United States")
+```
+
+```{r cars}
+## Exercise 9 (Not in ascedning order)
+laquinta |> count(state, Sort = TRUE)
+#Texas is the max and Vegas is the min
+```
+
+```{r cars}
+dennys |> count(state, sort = TRUE)
+# Califorina has the most and Delaware has the least.
+
+```
+
+```{r cars}
+## Exercise 10 
+
+dennys <- dennys %>%
+  mutate(establishment = "Denny's")
+
+laquinta <- laquinta %>%
+  mutate(establishment = "La Quinta")
+
+dn_lq <- bind_rows(dennys, laquinta)
+
+p <- ggplot(dn_lq, mapping = aes(x = longitude, y = latitude, color = establishment)) +
+  geom_point() 
+
+p + labs(title = "Denny and Laquinta in U.S.", subtitle = "Their locations in U.S.")
+
+```
+
+```{r cars}
+## Exercise 11
+dennys_NC <- dennys %>%
+  filter(state == "NC")
+dennys_NC <- dennys_NC %>%
+  mutate(establishment = "Denny's")
+
+laquinta_NC <- laquinta %>%
+  filter(state == "NC")
+laquinta_NC <- laquinta_NC %>%
+  mutate(establishment = "La Quinta")
+
+dn_lq <- bind_rows(dennys_NC, laquinta_NC)
+
+p <- ggplot(dn_lq, mapping = aes(x = longitude, y = latitude, color = establishment)) +
+  geom_point(alpha = 0.6) 
+
+p + labs(title = "Denny and Laquinta in U.S.", subtitle = "Denny and Laquinta locations in North Carolina")
+
+## Mitch joke doesn't seem to hold up here, because theirs only one location that are overlap. 
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure}
+## Exercise 12
+dennys_TX <- dennys %>%
+  filter(state == "TX")
+dennys_TX <- dennys_TX %>%
+  mutate(establishment = "Denny's")
+
+laquinta_TX <- laquinta %>%
+  filter(state == "TX")
+laquinta_TX <- laquinta_TX %>%
+  mutate(establishment = "La Quinta")
+
+dn_lq <- bind_rows(dennys_TX, laquinta_TX)
+
+p <- ggplot(dn_lq, mapping = aes(x = longitude, y = latitude, color = establishment)) +
+  geom_point(alpha = 0.5) 
+
+p + labs(title = "Denny and Laquinta in U.S.", subtitle = "Denny and Laquinta locations in Texas")
+
+## Mitch jokesseem to correct here, because several locations where their both next to each other. 
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
